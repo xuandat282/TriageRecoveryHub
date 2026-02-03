@@ -1,0 +1,140 @@
+"""FastAPI main application."""
+import logging
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Depends, BackgroundTasks, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
+from app.database import get_db, init_db, AsyncSessionLocal
+from app.models import Ticket
+from app.schemas import TicketCreate, TicketResponse, TicketListResponse
+from app.services import process_ticket_with_ai
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan manager."""
+    # Startup: Initialize database
+    logger.info("Initializing database...")
+    await init_db()
+    logger.info("Database initialized successfully")
+    yield
+    # Shutdown: cleanup if needed
+    logger.info("Shutting down application...")
+
+
+# Create FastAPI app
+app = FastAPI(
+    title="AI Support Triage Hub",
+    description="API for managing support tickets with AI-powered triage",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://frontend:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/")
+async def root():
+    """Health check endpoint."""
+    return {"message": "AI Support Triage Hub API", "status": "running"}
+
+
+@app.post("/tickets", response_model=TicketResponse, status_code=201)
+async def create_ticket(
+    ticket_data: TicketCreate,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Create a new support ticket.
+    
+    Returns 201 immediately with ticket ID and 'pending' status.
+    AI processing happens asynchronously in the background.
+    """
+    try:
+        # Create new ticket
+        new_ticket = Ticket(raw_content=ticket_data.raw_content)
+        db.add(new_ticket)
+        await db.commit()
+        await db.refresh(new_ticket)
+        
+        logger.info(f"Created ticket {new_ticket.id}")
+        
+        # Schedule background task for AI processing
+        # Create a new session for the background task
+        async def background_task():
+            async with AsyncSessionLocal() as bg_session:
+                await process_ticket_with_ai(new_ticket.id, bg_session)
+        
+        background_tasks.add_task(background_task)
+        
+        return new_ticket
+        
+    except Exception as e:
+        logger.error(f"Error creating ticket: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create ticket")
+
+
+@app.get("/tickets", response_model=TicketListResponse)
+async def list_tickets(
+    skip: int = 0,
+    limit: int = 100,
+    db: AsyncSession = Depends(get_db),
+):
+    """List all tickets with pagination."""
+    try:
+        # Get total count
+        count_result = await db.execute(select(Ticket))
+        total = len(count_result.scalars().all())
+        
+        # Get paginated tickets
+        result = await db.execute(
+            select(Ticket)
+            .order_by(Ticket.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        tickets = result.scalars().all()
+        
+        return TicketListResponse(tickets=tickets, total=total)
+        
+    except Exception as e:
+        logger.error(f"Error listing tickets: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to list tickets")
+
+
+@app.get("/tickets/{ticket_id}", response_model=TicketResponse)
+async def get_ticket(
+    ticket_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a specific ticket by ID."""
+    try:
+        result = await db.execute(
+            select(Ticket).where(Ticket.id == ticket_id)
+        )
+        ticket = result.scalar_one_or_none()
+        
+        if not ticket:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+        
+        return ticket
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting ticket: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get ticket")
