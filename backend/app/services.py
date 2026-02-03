@@ -1,21 +1,81 @@
 """Business logic and background task services."""
-import asyncio
 import logging
+import os
+import json
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from openai import AsyncOpenAI
+from dotenv import load_dotenv
 
 from app.models import Ticket, TicketStatus
 
+# Load environment variables from .env file
+load_dotenv()
+
 logger = logging.getLogger(__name__)
+
+# Initialize OpenAI client
+client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+
+async def analyze_ticket_with_llm(ticket_content: str) -> dict:
+    """
+    Call OpenAI GPT-4o-mini to analyze ticket and return structured data.
+    
+    Args:
+        ticket_content: The raw ticket content to analyze
+        
+    Returns:
+        dict with keys: category, urgency, sentiment_score, draft_response
+    """
+    try:
+        system_prompt = """You are an AI support ticket analyzer. Analyze the support ticket and provide:
+1. Category: One of [Technical, Billing, Account, General]
+2. Urgency: One of [Low, Medium, High, Critical]
+3. Sentiment Score: Integer from 1-10 (1=very negative, 10=very positive)
+4. Draft Response: A professional, helpful response to the customer
+
+Return your response as a JSON object with keys: category, urgency, sentiment_score, draft_response"""
+
+        response = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Analyze this support ticket:\n\n{ticket_content}"}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.7,
+        )
+        
+        # Parse JSON response
+        result = json.loads(response.choices[0].message.content)
+        
+        logger.info(f"LLM analysis complete: {result.get('category')}, {result.get('urgency')}")
+        
+        return {
+            "category": result.get("category", "General"),
+            "urgency": result.get("urgency", "Medium"),
+            "sentiment_score": int(result.get("sentiment_score", 5)),
+            "draft_response": result.get("draft_response", "Thank you for contacting support. We will review your request and respond shortly."),
+        }
+        
+    except Exception as e:
+        logger.error(f"Error calling OpenAI API: {str(e)}")
+        # Return default values on error
+        return {
+            "category": "General",
+            "urgency": "Medium",
+            "sentiment_score": 5,
+            "draft_response": "Thank you for contacting support. We will review your request and respond shortly.",
+        }
 
 
 async def process_ticket_with_ai(ticket_id: UUID, db_session: AsyncSession):
     """
     Background task to process ticket with AI.
     
-    This is a mock implementation that simulates AI processing.
-    In production, this would call an actual LLM API.
+    Calls OpenAI GPT-4o-mini to analyze and categorize the ticket.
     
     Args:
         ticket_id: UUID of the ticket to process
@@ -37,18 +97,14 @@ async def process_ticket_with_ai(ticket_id: UUID, db_session: AsyncSession):
         ticket.status = TicketStatus.PROCESSING
         await db_session.commit()
         
-        # Simulate AI processing delay (3 seconds)
-        await asyncio.sleep(3)
+        # Call OpenAI API for analysis
+        analysis = await analyze_ticket_with_llm(ticket.raw_content)
         
-        # Mock AI results
-        ticket.category = "Technical"
-        ticket.urgency = "High"
-        ticket.sentiment_score = 75
-        ticket.draft_response = (
-            f"Thank you for contacting support. We've reviewed your request: "
-            f"'{ticket.raw_content[:100]}...' and categorized it as a Technical issue "
-            f"with High urgency. Our team will respond within 24 hours."
-        )
+        # Update ticket with AI results
+        ticket.category = analysis["category"]
+        ticket.urgency = analysis["urgency"]
+        ticket.sentiment_score = analysis["sentiment_score"]
+        ticket.draft_response = analysis["draft_response"]
         ticket.status = TicketStatus.COMPLETED
         
         await db_session.commit()

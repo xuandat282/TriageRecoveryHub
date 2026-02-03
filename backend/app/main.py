@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from app.database import get_db, init_db, AsyncSessionLocal
 from app.models import Ticket
-from app.schemas import TicketCreate, TicketResponse, TicketListResponse
+from app.schemas import TicketCreate, TicketResponse, TicketListResponse, TicketUpdate
 from app.services import process_ticket_with_ai
 
 # Configure logging
@@ -138,3 +138,77 @@ async def get_ticket(
     except Exception as e:
         logger.error(f"Error getting ticket: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to get ticket")
+
+
+@app.patch("/tickets/{ticket_id}", response_model=TicketResponse)
+async def update_ticket(
+    ticket_id: str,
+    ticket_update: TicketUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a ticket's draft response or other fields."""
+    try:
+        result = await db.execute(
+            select(Ticket).where(Ticket.id == ticket_id)
+        )
+        ticket = result.scalar_one_or_none()
+        
+        if not ticket:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+        
+        # Update fields if provided
+        if ticket_update.draft_response is not None:
+            ticket.draft_response = ticket_update.draft_response
+        if ticket_update.category is not None:
+            ticket.category = ticket_update.category
+        if ticket_update.urgency is not None:
+            ticket.urgency = ticket_update.urgency
+        
+        await db.commit()
+        await db.refresh(ticket)
+        
+        logger.info(f"Updated ticket {ticket_id}")
+        return ticket
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating ticket: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update ticket")
+
+
+@app.post("/tickets/{ticket_id}/resolve", response_model=TicketResponse)
+async def resolve_ticket(
+    ticket_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark a ticket as resolved."""
+    try:
+        result = await db.execute(
+            select(Ticket).where(Ticket.id == ticket_id)
+        )
+        ticket = result.scalar_one_or_none()
+        
+        if not ticket:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+        
+        if ticket.resolved:
+            raise HTTPException(status_code=400, detail="Ticket already resolved")
+        
+        # Mark as resolved
+        from datetime import datetime
+        ticket.resolved = True
+        ticket.resolved_at = datetime.utcnow()
+        # ticket.resolved_by can be set when auth is implemented
+        
+        await db.commit()
+        await db.refresh(ticket)
+        
+        logger.info(f"Resolved ticket {ticket_id}")
+        return ticket
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error resolving ticket: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to resolve ticket")

@@ -1,7 +1,7 @@
 """SQLAlchemy models for the application."""
 import enum
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, Enum
+from sqlalchemy import Column, Integer, String, Text, DateTime, Enum, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 
@@ -28,6 +28,11 @@ class Ticket(Base):
     sentiment_score = Column(Integer, nullable=True)
     draft_response = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Resolution tracking
+    resolved = Column(Boolean, default=False, nullable=False)
+    resolved_at = Column(DateTime, nullable=True)
+    resolved_by = Column(String(100), nullable=True)
 
     def __repr__(self):
-        return f"<Ticket(id={self.id}, status={self.status}, created_at={self.created_at})>"
+        return f"<Ticket(id={self.id}, status={self.status}, resolved={self.resolved}, created_at={self.created_at})>"

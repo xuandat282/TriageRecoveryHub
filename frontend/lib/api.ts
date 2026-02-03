@@ -15,10 +15,19 @@ export interface Ticket {
     sentiment_score: number | null;
     draft_response: string | null;
     created_at: string;
+    resolved: boolean;
+    resolved_at: string | null;
+    resolved_by: string | null;
 }
 
 export interface TicketCreateRequest {
     raw_content: string;
+}
+
+export interface TicketUpdateRequest {
+    draft_response?: string;
+    category?: string;
+    urgency?: string;
 }
 
 export interface TicketListResponse {
@@ -60,6 +69,37 @@ export const api = {
 
         if (!response.ok) {
             throw new Error("Failed to fetch ticket");
+        }
+
+        return response.json();
+    },
+
+    async updateTicket(id: string, data: TicketUpdateRequest): Promise<Ticket> {
+        const response = await fetch(`${API_URL}/tickets/${id}`, {
+            method: "PATCH",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            throw new Error("Failed to update ticket");
+        }
+
+        return response.json();
+    },
+
+    async resolveTicket(id: string): Promise<Ticket> {
+        const response = await fetch(`${API_URL}/tickets/${id}/resolve`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error("Failed to resolve ticket");
         }
 
         return response.json();

@@ -31,7 +31,11 @@ TriageRecoveryHub/
 ## Features
 
 - **Async Ticket Creation**: POST /tickets returns 201 immediately
-- **Background AI Processing**: Asynchronous LLM categorization and response drafting
+- **AI-Powered Processing**: OpenAI GPT-4o-mini analyzes tickets in the background
+- **Intelligent Categorization**: Automatic ticket categorization (Technical, Billing, Account, General)
+- **Urgency Detection**: AI-determined urgency levels (Low, Medium, High, Critical)
+- **Sentiment Analysis**: Sentiment scoring from 0-100
+- **Draft Responses**: AI-generated professional responses
 - **Status Tracking**: Real-time ticket status updates (pending → processing → completed/failed)
 - **Error Handling**: Robust error handling in background tasks
 - **RESTful API**: Clean API design with proper validation
@@ -43,6 +47,7 @@ TriageRecoveryHub/
 - Docker and Docker Compose
 - Node.js 18+ (for local frontend development)
 - Python 3.11+ (for local backend development)
+- **OpenAI API Key** (required for AI ticket processing)
 
 ### Running with Docker Compose
 
@@ -51,12 +56,26 @@ TriageRecoveryHub/
    cd TriageRecoveryHub
    ```
 
-2. Start all services:
+2. **Set up your OpenAI API key:**
    ```bash
-   docker-compose up --build
+   # Create .env file in the root directory
+   cp .env.example .env
+   
+   # Edit .env and add your OpenAI API key
+   # OPENAI_API_KEY=sk-your-actual-api-key-here
    ```
 
-3. Access the application:
+3. Start all services:
+   ```bash
+   ./start.sh
+   ```
+   
+   Or manually:
+   ```bash
+   docker compose up --build
+   ```
+
+4. Access the application:
    - Frontend: http://localhost:3000
    - Backend API: http://localhost:8000
    - API Docs: http://localhost:8000/docs
@@ -134,21 +153,31 @@ Get a specific ticket by ID.
 
 ## Environment Variables
 
-Create a `.env` file in the backend directory (see `.env.example`):
+### Root Directory (.env)
+
+Create a `.env` file in the root directory for Docker Compose:
 
 ```env
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/triage_hub
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
-POSTGRES_DB=triage_hub
+OPENAI_API_KEY=sk-your-actual-api-key-here
+```
+
+### Backend Directory (backend/.env)
+
+For local development, create `backend/.env`:
+
+```env
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/triage_hub
+OPENAI_API_KEY=sk-your-actual-api-key-here
 ```
 
 ## Development Notes
 
-- The AI processing is currently mocked with a 3-second delay
-- In production, replace `process_ticket_with_ai` with actual LLM API calls
-- Background tasks use separate database sessions to avoid conflicts
-- CORS is configured for localhost:3000 (frontend)
+- **AI Processing**: Uses OpenAI GPT-4o-mini for real-time ticket analysis
+- **Auto-refresh**: Frontend polls every 5 seconds for status updates
+- **Database**: PostgreSQL in Docker with persistent volume
+- **Development Mode**: Backend and frontend have hot-reload enabled
+- **Type Safety**: Full TypeScript on frontend, Pydantic on backend
+- **API Costs**: Be aware of OpenAI API usage costs when processing tickets
 
 ## License
 

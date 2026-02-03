@@ -12,6 +12,13 @@ class TicketCreate(BaseModel):
     raw_content: str = Field(..., min_length=1, description="The raw content of the support ticket")
 
 
+class TicketUpdate(BaseModel):
+    """Schema for updating a ticket."""
+    draft_response: Optional[str] = Field(None, description="Updated draft response")
+    category: Optional[str] = Field(None, description="Updated category")
+    urgency: Optional[str] = Field(None, description="Updated urgency")
+
+
 class TicketResponse(BaseModel):
     """Schema for ticket response."""
     id: UUID
@@ -22,6 +29,9 @@ class TicketResponse(BaseModel):
     sentiment_score: Optional[int] = None
     draft_response: Optional[str] = None
     created_at: datetime
+    resolved: bool
+    resolved_at: Optional[datetime] = None
+    resolved_by: Optional[str] = None
 
     class Config:
         from_attributes = True
