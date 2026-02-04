@@ -1,13 +1,15 @@
 """Business logic and background task services."""
+import json
 import logging
 import os
-import json
 from uuid import UUID
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+
 from dotenv import load_dotenv
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 import google.generativeai as genai
 
+from app.events import event_manager
 from app.models import Ticket, TicketStatus
 
 # Load environment variables from .env file
@@ -108,6 +110,22 @@ Respond ONLY with valid JSON."""
         logger.error(f"Error calling Gemini API: {str(e)}")
         return _fallback_analysis(ticket_content)
 
+
+async def _broadcast_ticket_event(ticket_id: UUID, status: str):
+    """
+    Broadcast ticket status update via Server-Sent Events.
+    
+    Args:
+        ticket_id: UUID of the ticket
+        status: New status of the ticket
+    """
+    await event_manager.broadcast(json.dumps({
+        "type": "ticket_update",
+        "ticket_id": str(ticket_id),
+        "status": status
+    }))
+
+
 async def process_ticket_with_ai(ticket_id: UUID, db_session: AsyncSession):
     """
     Background task to process ticket with AI.
@@ -134,7 +152,7 @@ async def process_ticket_with_ai(ticket_id: UUID, db_session: AsyncSession):
         ticket.status = TicketStatus.PROCESSING
         await db_session.commit()
         
-        # Call OpenAI API for analysis
+        # Call Gemini API for analysis
         analysis = await analyze_ticket_with_llm(ticket.raw_content)
         
         # Update ticket with AI results
@@ -146,6 +164,9 @@ async def process_ticket_with_ai(ticket_id: UUID, db_session: AsyncSession):
         
         await db_session.commit()
         logger.info(f"Successfully processed ticket {ticket_id}")
+
+        # Broadcast completion event
+        await _broadcast_ticket_event(ticket_id, "completed")
         
     except Exception as e:
         logger.error(f"Error processing ticket {ticket_id}: {str(e)}")
@@ -159,6 +180,9 @@ async def process_ticket_with_ai(ticket_id: UUID, db_session: AsyncSession):
             if ticket:
                 ticket.status = TicketStatus.FAILED
                 await db_session.commit()
+                
+                # Broadcast failure event
+                await _broadcast_ticket_event(ticket_id, "failed")
         except Exception as rollback_error:
             logger.error(f"Failed to update ticket status to failed: {str(rollback_error)}")
 

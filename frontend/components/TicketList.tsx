@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+
 import { api, type Ticket, TicketStatus } from "@/lib/api";
+import { useTicketEvents } from "@/hooks/useTicketEvents";
 import TicketCard from "./TicketCard";
 import TicketDetail from "./TicketDetail";
 
@@ -12,16 +14,13 @@ export default function TicketList() {
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
     const [filter, setFilter] = useState<FilterType>("all");
 
+    // Enable real-time updates via SSE
+    useTicketEvents();
+
     const { data, isLoading, error } = useQuery({
         queryKey: ["tickets"],
         queryFn: api.getTickets,
-        refetchInterval: (query) => {
-            // Smart polling: only poll if there are pending/processing tickets
-            const hasPendingOrProcessing = query.state.data?.tickets.some(
-                (t) => t.status === TicketStatus.PENDING || t.status === TicketStatus.PROCESSING
-            );
-            return hasPendingOrProcessing ? 3000 : false; // Poll every 3s or stop
-        },
+        // No polling needed!
     });
 
     const filteredTickets = data?.tickets.filter((ticket) => {

@@ -1,12 +1,17 @@
 """FastAPI main application."""
+import asyncio
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime
+
 from fastapi import FastAPI, Depends, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db, init_db, AsyncSessionLocal
+from app.events import event_manager
 from app.models import Ticket
 from app.schemas import TicketCreate, TicketResponse, TicketListResponse, TicketUpdate
 from app.services import process_ticket_with_ai
@@ -196,7 +201,6 @@ async def resolve_ticket(
             raise HTTPException(status_code=400, detail="Ticket already resolved")
         
         # Mark as resolved
-        from datetime import datetime
         ticket.resolved = True
         ticket.resolved_at = datetime.utcnow()
         # ticket.resolved_by can be set when auth is implemented
@@ -212,3 +216,30 @@ async def resolve_ticket(
     except Exception as e:
         logger.error(f"Error resolving ticket: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to resolve ticket")
+
+
+@app.get("/events")
+async def stream_ticket_events():
+    """
+    Server-Sent Events endpoint for real-time ticket updates.
+    
+    Clients connect to this endpoint and receive push notifications
+    when tickets are processed or updated.
+    """
+    async def event_generator():
+        queue = await event_manager.connect()
+        try:
+            while True:
+                message = await queue.get()
+                yield f"data: {message}\n\n"
+        except asyncio.CancelledError:
+            event_manager.disconnect(queue)
+            
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )
