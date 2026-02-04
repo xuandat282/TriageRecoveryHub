@@ -2,12 +2,56 @@
 
 A production-ready monorepo for managing support tickets with AI-powered triage and categorization.
 
+## System Architecture
+
+```mermaid
+flowchart TB
+    subgraph Client["Client Layer"]
+        Browser["Browser"]
+    end
+    
+    subgraph Frontend["Frontend (Next.js)"]
+        UI["React Components"]
+        TQ["TanStack Query"]
+    end
+    
+    subgraph Backend["Backend (FastAPI)"]
+        API["REST API"]
+        BG["Background Tasks"]
+        VAL["Pydantic Validation"]
+    end
+    
+    subgraph AI["AI Layer"]
+        GEMINI["Gemini 2.5 Flash"]
+    end
+    
+    subgraph Data["Data Layer"]
+        PG[("PostgreSQL")]
+    end
+    
+    Browser --> UI
+    UI --> TQ
+    TQ -->|"Polling (3s)"| API
+    API --> VAL
+    VAL --> PG
+    API -->|"201 Created"| TQ
+    API -->|"add_task()"| BG
+    BG -->|"Async"| GEMINI
+    BG -->|"Update"| PG
+```
+
 ## Tech Stack
 
-- **Backend**: Python FastAPI, SQLAlchemy (Async), Pydantic, Uvicorn
-- **Frontend**: Next.js 16 (App Router), TailwindCSS, TypeScript
-- **Database**: PostgreSQL
-- **Infrastructure**: Docker Compose
+| Layer | Technology | Purpose |
+|-------|------------|---------|
+| Frontend | Next.js 16, TailwindCSS | App Router, Styling |
+| State | TanStack Query | Server state + polling |
+| API | FastAPI | Async REST endpoints |
+| Validation | Pydantic | Request/Response schemas |
+| ORM | SQLAlchemy (Async) | Database abstraction |
+| Database | PostgreSQL 15 | Persistent storage |
+| AI | Gemini 2.5 Flash | Ticket analysis |
+| Container | Docker Compose | Multi-service orchestration |
 
 ## Project Structure
 
@@ -15,169 +59,155 @@ A production-ready monorepo for managing support tickets with AI-powered triage 
 TriageRecoveryHub/
 ├── backend/                 # FastAPI backend
 │   ├── app/
-│   │   ├── __init__.py
-│   │   ├── main.py         # FastAPI application
-│   │   ├── models.py       # SQLAlchemy models
-│   │   ├── schemas.py      # Pydantic schemas
-│   │   ├── database.py     # Database configuration
-│   │   └── services.py     # Background task services
+│   │   ├── main.py         # API Routes
+│   │   ├── models.py       # SQLAlchemy ORM
+│   │   ├── schemas.py      # Pydantic Models
+│   │   ├── database.py     # Async Session
+│   │   └── services.py     # AI Processing
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── frontend/               # Next.js frontend
-│   └── (Next.js app structure)
-└── docker-compose.yml      # Docker orchestration
+│   ├── components/
+│   │   ├── TicketForm.tsx
+│   │   └── TicketList.tsx
+│   └── app/page.tsx
+└── docker-compose.yml
 ```
 
 ## Features
 
-- **Async Ticket Creation**: POST /tickets returns 201 immediately
-- **AI-Powered Processing**: OpenAI GPT-4o-mini analyzes tickets in the background
-- **Intelligent Categorization**: Automatic ticket categorization (Technical, Billing, Account, General)
-- **Urgency Detection**: AI-determined urgency levels (Low, Medium, High, Critical)
-- **Sentiment Analysis**: Sentiment scoring from 0-100
+- **Non-blocking Architecture**: POST /tickets returns 201 immediately
+- **Async AI Processing**: Gemini 2.5 Flash analyzes tickets in background
+- **Intelligent Categorization**: Technical, Billing, Account, General
+- **Urgency Detection**: Low, Medium, High, Critical
+- **Sentiment Analysis**: 1-10 scale scoring
 - **Draft Responses**: AI-generated professional responses
-- **Status Tracking**: Real-time ticket status updates (pending → processing → completed/failed)
-- **Error Handling**: Robust error handling in background tasks
-- **RESTful API**: Clean API design with proper validation
+- **Real-time Updates**: Frontend polls for status changes
+- **Error Resilience**: Fallback handling when AI fails
+
+## Request/Response Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant FE as Frontend
+    participant API as FastAPI
+    participant BG as BackgroundTask
+    participant AI as Gemini API
+    participant DB as PostgreSQL
+    
+    U->>FE: Submit Ticket
+    FE->>API: POST /tickets
+    API->>DB: INSERT (status=pending)
+    API->>BG: add_task(process_ticket)
+    API-->>FE: 201 Created
+    
+    Note over BG,AI: Async Processing
+    BG->>DB: UPDATE status=processing
+    BG->>AI: Analyze content
+    AI-->>BG: Analysis result
+    BG->>DB: UPDATE with AI results
+    
+    loop Polling (3s)
+        FE->>API: GET /tickets
+        API-->>FE: Updated list
+    end
+```
+
+## Database Schema
+
+```mermaid
+erDiagram
+    TICKETS {
+        UUID id PK
+        TEXT raw_content
+        ENUM status "pending|processing|completed|failed"
+        VARCHAR category
+        VARCHAR urgency
+        INTEGER sentiment_score
+        TEXT draft_response
+        DATETIME created_at
+        BOOLEAN resolved
+        DATETIME resolved_at
+        VARCHAR resolved_by
+    }
+```
 
 ## Getting Started
 
 ### Prerequisites
 
 - Docker and Docker Compose
-- Node.js 18+ (for local frontend development)
-- Python 3.11+ (for local backend development)
-- **OpenAI API Key** (required for AI ticket processing)
+- Gemini API Key ([Get one here](https://makersuite.google.com/app/apikey))
 
-### Running with Docker Compose
+### Quick Start
 
-1. Clone the repository and navigate to the project directory:
-   ```bash
-   cd TriageRecoveryHub
-   ```
+```bash
+# 1. Clone and navigate
+cd TriageRecoveryHub
 
-2. **Set up your OpenAI API key:**
-   ```bash
-   # Create .env file in the root directory
-   cp .env.example .env
-   
-   # Edit .env and add your OpenAI API key
-   # OPENAI_API_KEY=sk-your-actual-api-key-here
-   ```
+# 2. Set your Gemini API key
+echo "GEMINI_API_KEY=your-key-here" > .env
 
-3. Start all services:
-   ```bash
-   ./start.sh
-   ```
-   
-   Or manually:
-   ```bash
-   docker compose up --build
-   ```
+# 3. Start all services
+docker compose up --build
 
-4. Access the application:
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
-   - API Docs: http://localhost:8000/docs
+# 4. Access the app
+# Frontend: http://localhost:3000
+# API Docs: http://localhost:8000/docs
+```
 
 ### Local Development
 
-#### Backend
-
+**Backend:**
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-#### Frontend
-
+**Frontend:**
 ```bash
 cd frontend
-npm install
-npm run dev
+npm install && npm run dev
 ```
 
 ## API Endpoints
 
-### POST /tickets
-Create a new support ticket.
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/tickets` | Create ticket + trigger AI |
+| GET | `/tickets` | List all tickets |
+| GET | `/tickets/{id}` | Get ticket details |
+| PATCH | `/tickets/{id}` | Update draft/category |
+| POST | `/tickets/{id}/resolve` | Mark as resolved |
 
-**Request Body:**
-```json
-{
-  "raw_content": "My application is crashing when I try to login"
-}
+### Example Request
+
+```bash
+curl -X POST http://localhost:8000/tickets \
+  -H "Content-Type: application/json" \
+  -d '{"raw_content": "My app crashes when uploading files"}'
 ```
-
-**Response (201 Created):**
-```json
-{
-  "id": "uuid-here",
-  "raw_content": "My application is crashing when I try to login",
-  "status": "pending",
-  "category": null,
-  "urgency": null,
-  "sentiment_score": null,
-  "draft_response": null,
-  "created_at": "2026-02-02T13:52:45.123Z"
-}
-```
-
-### GET /tickets
-List all tickets with pagination.
-
-**Query Parameters:**
-- `skip`: Number of tickets to skip (default: 0)
-- `limit`: Maximum number of tickets to return (default: 100)
-
-### GET /tickets/{ticket_id}
-Get a specific ticket by ID.
-
-## Database Schema
-
-### Tickets Table
-
-| Column | Type | Description |
-|--------|------|-------------|
-| id | UUID | Primary key |
-| raw_content | Text | Original ticket content |
-| status | Enum | pending, processing, completed, failed |
-| category | String | AI-generated category |
-| urgency | String | AI-generated urgency level |
-| sentiment_score | Integer | AI-generated sentiment score |
-| draft_response | Text | AI-generated draft response |
-| created_at | DateTime | Timestamp of creation |
 
 ## Environment Variables
 
-### Root Directory (.env)
+| Variable | Description |
+|----------|-------------|
+| `GEMINI_API_KEY` | Google Gemini API key |
+| `DATABASE_URL` | PostgreSQL connection string |
 
-Create a `.env` file in the root directory for Docker Compose:
+## Status State Machine
 
-```env
-OPENAI_API_KEY=sk-your-actual-api-key-here
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING: Created
+    PENDING --> PROCESSING: Task Starts
+    PROCESSING --> COMPLETED: AI Success
+    PROCESSING --> FAILED: AI Error
+    COMPLETED --> [*]: Resolved
 ```
-
-### Backend Directory (backend/.env)
-
-For local development, create `backend/.env`:
-
-```env
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/triage_hub
-OPENAI_API_KEY=sk-your-actual-api-key-here
-```
-
-## Development Notes
-
-- **AI Processing**: Uses OpenAI GPT-4o-mini for real-time ticket analysis
-- **Auto-refresh**: Frontend polls every 5 seconds for status updates
-- **Database**: PostgreSQL in Docker with persistent volume
-- **Development Mode**: Backend and frontend have hot-reload enabled
-- **Type Safety**: Full TypeScript on frontend, Pydantic on backend
-- **API Costs**: Be aware of OpenAI API usage costs when processing tickets
 
 ## License
 
