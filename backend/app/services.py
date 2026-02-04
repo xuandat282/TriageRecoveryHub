@@ -87,49 +87,6 @@ Respond ONLY with valid JSON, no other text."""
         logger.error(f"Error calling Gemini API: {str(e)}")
         return _mock_analysis(ticket_content)
 
-
-def _mock_analysis(ticket_content: str) -> dict:
-    """
-    Fallback mock analysis when Gemini API is unavailable.
-    
-    Args:
-        ticket_content: The raw ticket content to analyze
-        
-    Returns:
-        dict with keys: category, urgency, sentiment_score, draft_response
-    """
-    logger.info("Using mock analysis (Gemini API unavailable)")
-    
-    content_lower = ticket_content.lower()
-    
-    # Simple keyword-based categorization
-    if any(word in content_lower for word in ["bug", "error", "crash", "broken"]):
-        category = "Technical"
-        urgency = "High"
-    elif any(word in content_lower for word in ["bill", "charge", "payment", "refund"]):
-        category = "Billing"
-        urgency = "Medium"
-    elif any(word in content_lower for word in ["account", "login", "password", "access"]):
-        category = "Account"
-        urgency = "Medium"
-    else:
-        category = "General"
-        urgency = "Low"
-    
-    # Simple sentiment based on negative words
-    negative_words = ["angry", "frustrated", "terrible", "worst", "hate"]
-    sentiment_score = 7 if not any(word in content_lower for word in negative_words) else 3
-    
-    draft_response = f"Thank you for contacting support regarding your {category.lower()} issue. We understand this is important to you and will address it promptly."
-    
-    return {
-        "category": category,
-        "urgency": urgency,
-        "sentiment_score": sentiment_score,
-        "draft_response": draft_response,
-    }
-
-
 async def process_ticket_with_ai(ticket_id: UUID, db_session: AsyncSession):
     """
     Background task to process ticket with AI.
@@ -183,3 +140,44 @@ async def process_ticket_with_ai(ticket_id: UUID, db_session: AsyncSession):
                 await db_session.commit()
         except Exception as rollback_error:
             logger.error(f"Failed to update ticket status to failed: {str(rollback_error)}")
+
+def _mock_analysis(ticket_content: str) -> dict:
+    """
+    Fallback mock analysis when Gemini API is unavailable.
+    
+    Args:
+        ticket_content: The raw ticket content to analyze
+        
+    Returns:
+        dict with keys: category, urgency, sentiment_score, draft_response
+    """
+    logger.info("Using mock analysis (Gemini API unavailable)")
+    
+    content_lower = ticket_content.lower()
+    
+    # Simple keyword-based categorization
+    if any(word in content_lower for word in ["bug", "error", "crash", "broken"]):
+        category = "Technical"
+        urgency = "High"
+    elif any(word in content_lower for word in ["bill", "charge", "payment", "refund"]):
+        category = "Billing"
+        urgency = "Medium"
+    elif any(word in content_lower for word in ["account", "login", "password", "access"]):
+        category = "Account"
+        urgency = "Medium"
+    else:
+        category = "General"
+        urgency = "Low"
+    
+    # Simple sentiment based on negative words
+    negative_words = ["angry", "frustrated", "terrible", "worst", "hate"]
+    sentiment_score = 7 if not any(word in content_lower for word in negative_words) else 3
+    
+    draft_response = f"Thank you for contacting support regarding your {category.lower()} issue. We understand this is important to you and will address it promptly."
+    
+    return {
+        "category": category,
+        "urgency": urgency,
+        "sentiment_score": sentiment_score,
+        "draft_response": draft_response,
+    }
