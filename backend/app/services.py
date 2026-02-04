@@ -34,25 +34,46 @@ async def analyze_ticket_with_llm(ticket_content: str) -> dict:
     try:
         # Check if API key is configured
         if not GEMINI_API_KEY or GEMINI_API_KEY == "[GCP_API_KEY]":
-            logger.warning("Gemini API key not configured, using mock analysis")
-            return _mock_analysis(ticket_content)
+            logger.warning("Gemini API key not configured, using fallback analysis")
+            return _fallback_analysis(ticket_content)
         
         # Initialize Gemini model
         model = genai.GenerativeModel('gemini-2.5-flash')
         
         # Create prompt for ticket analysis
-        prompt = f"""You are an AI support ticket analyzer. Analyze the following support ticket and provide:
-1. Category: One of [Technical, Billing, Account, General]
-2. Urgency: One of [Low, Medium, High, Critical]
-3. Sentiment Score: Integer from 1-10 (1=very negative, 10=very positive)
-4. Draft Response: A professional, helpful response to the customer
+        prompt = f"""You are an expert support agent and ticket analyzer. Your goal is to accurately categorize tickets and draft empathetic, professional responses.
 
-Return your response as a JSON object with keys: category, urgency, sentiment_score, draft_response
+Analyze the following support ticket step-by-step:
+
+1. **Categorization**: Match the content to the best category:
+   - *Technical*: Bugs, crashes, errors, feature broken.
+   - *Billing*: Invoices, charges, refunds, pricing.
+   - *Account*: Login issues, password reset, profile updates.
+   - *Spam*: Unsolicited offers, ads, nonsense content.
+   - *General*: Product questions, feedback, or effectively "Other".
+
+2. **Urgency Assessment**:
+   - *Critical*: System down, data loss, security breach, financial loss.
+   - *High*: Core feature broken, cannot work, frustrated VIP.
+   - *Medium*: Non-critical bug, question, account update.
+   - *Low*: Minor feedback, feature request, spam.
+
+3. **Sentiment Analysis**: Score from 1 (Furious/Abusive) to 10 (Delighted).
+   - < 4: Negative/Frustrated
+   - 4-6: Neutral/Matter-of-fact
+   - > 6: Positive/Happy
+
+4. **Draft Response**: Write a concise, professional reply.
+   - Acknowledge the specific issue.
+   - Match the user's tone (be empathetic if they are frustrated).
+   - If it's *Spam*, set draft_response to "N/A".
+
+Return your result as a JSON object with these exact keys: `category`, `urgency`, `sentiment_score`, `draft_response`.
 
 Support Ticket:
 {ticket_content}
 
-Respond ONLY with valid JSON, no other text."""
+Respond ONLY with valid JSON."""
 
         # Call Gemini API
         response = model.generate_content(prompt)
@@ -82,10 +103,10 @@ Respond ONLY with valid JSON, no other text."""
         
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse Gemini response as JSON: {str(e)}")
-        return _mock_analysis(ticket_content)
+        return _fallback_analysis(ticket_content)
     except Exception as e:
         logger.error(f"Error calling Gemini API: {str(e)}")
-        return _mock_analysis(ticket_content)
+        return _fallback_analysis(ticket_content)
 
 async def process_ticket_with_ai(ticket_id: UUID, db_session: AsyncSession):
     """
@@ -141,9 +162,9 @@ async def process_ticket_with_ai(ticket_id: UUID, db_session: AsyncSession):
         except Exception as rollback_error:
             logger.error(f"Failed to update ticket status to failed: {str(rollback_error)}")
 
-def _mock_analysis(ticket_content: str) -> dict:
+def _fallback_analysis(ticket_content: str) -> dict:
     """
-    Fallback mock analysis when Gemini API is unavailable.
+    Fallback analysis when Gemini API is unavailable.
     
     Args:
         ticket_content: The raw ticket content to analyze
@@ -151,7 +172,7 @@ def _mock_analysis(ticket_content: str) -> dict:
     Returns:
         dict with keys: category, urgency, sentiment_score, draft_response
     """
-    logger.info("Using mock analysis (Gemini API unavailable)")
+    logger.info("Using fallback analysis (Gemini API unavailable)")
     
     content_lower = ticket_content.lower()
     
@@ -165,6 +186,9 @@ def _mock_analysis(ticket_content: str) -> dict:
     elif any(word in content_lower for word in ["account", "login", "password", "access"]):
         category = "Account"
         urgency = "Medium"
+    elif any(word in content_lower for word in ["norton", "casino", "lottery", "prize", "unclaimed"]):
+        category = "Spam"
+        urgency = "Low"
     else:
         category = "General"
         urgency = "Low"
