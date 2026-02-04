@@ -2,10 +2,52 @@
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
-from pydantic import BaseModel, Field
 
-from app.models import TicketStatus
+from pydantic import BaseModel, EmailStr, Field
 
+from app.models import TicketStatus, UserRole
+
+
+# ============================================================================
+# Authentication Schemas
+# ============================================================================
+
+class UserCreate(BaseModel):
+    """Schema for user registration."""
+    email: EmailStr
+    password: str = Field(..., min_length=8, description="Password must be at least 8 characters")
+    full_name: str = Field(..., min_length=1, max_length=255)
+    role: UserRole = UserRole.CUSTOMER
+
+
+class UserLogin(BaseModel):
+    """Schema for user login."""
+    email: EmailStr
+    password: str
+
+
+class Token(BaseModel):
+    """Schema for JWT token response."""
+    access_token: str
+    token_type: str = "bearer"
+
+
+class UserResponse(BaseModel):
+    """Schema for user response."""
+    id: UUID
+    email: str
+    full_name: str
+    role: UserRole
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================================================
+# Ticket Schemas
+# ============================================================================
 
 class TicketCreate(BaseModel):
     """Schema for creating a new ticket."""
@@ -29,6 +71,7 @@ class TicketResponse(BaseModel):
     sentiment_score: Optional[int] = None
     draft_response: Optional[str] = None
     created_at: datetime
+    created_by: Optional[UUID] = None
     resolved: bool
     resolved_at: Optional[datetime] = None
     resolved_by: Optional[str] = None

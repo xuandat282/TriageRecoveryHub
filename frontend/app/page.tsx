@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import ProtectedRoute from "@/components/ProtectedRoute";
+import Header from "@/components/Header";
 import TicketForm from "@/components/TicketForm";
 import TicketList from "@/components/TicketList";
 
@@ -13,62 +15,76 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      <div className="container mx-auto px-4 py-12">
-        <div className="max-w-6xl mx-auto">
-          {/* Header */}
-          <div className="text-center mb-12">
-            <h1 className="text-5xl font-bold text-gray-900 mb-4">
-              AI Support Triage Hub
-            </h1>
-            <p className="text-xl text-gray-600">
-              Submit your support tickets and let AI categorize and draft responses
-            </p>
-          </div>
+    <ProtectedRoute>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+        <Header />
 
-          {/* Main Grid */}
-          <div className="grid lg:grid-cols-2 gap-8">
-            {/* Left Column - Form */}
-            <div>
-              <TicketForm onTicketCreated={handleTicketCreated} />
+        <main className="container mx-auto px-4 py-8">
+          <div className="max-w-7xl mx-auto">
+            {/* Page Title */}
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold text-slate-900 mb-2">
+                Support Dashboard
+              </h1>
+              <p className="text-slate-600">
+                Manage and track support tickets with AI-powered assistance
+              </p>
             </div>
 
-            {/* Right Column - Ticket List */}
-            <div key={refreshKey}>
-              <TicketList />
-            </div>
-          </div>
+            {/* Main Grid */}
+            <div className="grid lg:grid-cols-2 gap-6">
+              {/* Left Column - Form */}
+              <div>
+                <TicketForm onTicketCreated={handleTicketCreated} />
+              </div>
 
-          {/* Footer Info */}
-          <div className="mt-12 text-center">
-            <div className="bg-white rounded-lg shadow-md p-6 max-w-3xl mx-auto">
-              <h3 className="text-lg font-semibold text-gray-800 mb-3">
-                How It Works
-              </h3>
-              <div className="grid md:grid-cols-3 gap-4 text-sm text-gray-600">
-                <div>
-                  <div className="bg-blue-100 text-blue-600 rounded-full w-8 h-8 flex items-center justify-center mx-auto mb-2 font-bold">
-                    1
+              {/* Right Column - Ticket List */}
+              <div key={refreshKey}>
+                <TicketList />
+              </div>
+            </div>
+
+            {/* Info Cards */}
+            <div className="mt-8 grid md:grid-cols-3 gap-4">
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <span className="text-blue-600 font-bold text-lg">1</span>
                   </div>
-                  <p>Submit your support ticket with issue details</p>
+                  <h3 className="font-semibold text-slate-900">Submit Ticket</h3>
                 </div>
-                <div>
-                  <div className="bg-purple-100 text-purple-600 rounded-full w-8 h-8 flex items-center justify-center mx-auto mb-2 font-bold">
-                    2
+                <p className="text-sm text-slate-600">
+                  Describe your issue in detail for accurate AI analysis
+                </p>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+                    <span className="text-indigo-600 font-bold text-lg">2</span>
                   </div>
-                  <p>AI analyzes and categorizes your ticket in the background</p>
+                  <h3 className="font-semibold text-slate-900">AI Analysis</h3>
                 </div>
-                <div>
-                  <div className="bg-green-100 text-green-600 rounded-full w-8 h-8 flex items-center justify-center mx-auto mb-2 font-bold">
-                    3
+                <p className="text-sm text-slate-600">
+                  Automatic categorization, urgency assessment, and sentiment analysis
+                </p>
+              </div>
+
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                    <span className="text-green-600 font-bold text-lg">3</span>
                   </div>
-                  <p>Receive AI-generated draft response and categorization</p>
+                  <h3 className="font-semibold text-slate-900">Get Response</h3>
                 </div>
+                <p className="text-sm text-slate-600">
+                  Receive AI-generated draft responses and track resolution
+                </p>
               </div>
             </div>
           </div>
-        </div>
+        </main>
       </div>
-    </main>
+    </ProtectedRoute>
   );
 }

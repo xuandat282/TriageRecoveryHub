@@ -10,10 +10,26 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import (
+    create_access_token,
+    get_current_user,
+    hash_password,
+    require_role,
+    verify_password,
+)
 from app.database import get_db, init_db, AsyncSessionLocal
 from app.events import event_manager
-from app.models import Ticket
-from app.schemas import TicketCreate, TicketResponse, TicketListResponse, TicketUpdate
+from app.models import Ticket, User, UserRole
+from app.schemas import (
+    TicketCreate,
+    TicketResponse,
+    TicketListResponse,
+    TicketUpdate,
+    UserCreate,
+    UserLogin,
+    Token,
+    UserResponse,
+)
 from app.services import process_ticket_with_ai
 
 # Configure logging
@@ -57,26 +73,129 @@ async def root():
     return {"message": "AI Support Triage Hub API", "status": "running"}
 
 
+# ============================================================================
+# Authentication Endpoints
+# ============================================================================
+
+@app.post("/auth/register", response_model=UserResponse, status_code=201)
+async def register(
+    user_data: UserCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Register a new user.
+    
+    Creates a new user account with hashed password.
+    Default role is CUSTOMER unless specified.
+    """
+    # Check if user already exists
+    result = await db.execute(
+        select(User).where(User.email == user_data.email)
+    )
+    existing_user = result.scalar_one_or_none()
+    
+    if existing_user:
+        raise HTTPException(
+            status_code=400,
+            detail="Email already registered"
+        )
+    
+    # Create new user
+    new_user = User(
+        email=user_data.email,
+        hashed_password=hash_password(user_data.password),
+        full_name=user_data.full_name,
+        role=user_data.role,
+    )
+    
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+    
+    logger.info(f"Registered new user: {new_user.email} (role: {new_user.role})")
+    
+    return new_user
+
+
+@app.post("/auth/login", response_model=Token)
+async def login(
+    credentials: UserLogin,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Login and receive JWT access token.
+    
+    Returns a JWT token that must be included in subsequent requests
+    as: Authorization: Bearer <token>
+    """
+    # Find user by email
+    result = await db.execute(
+        select(User).where(User.email == credentials.email)
+    )
+    user = result.scalar_one_or_none()
+    
+    # Verify user exists and password is correct
+    if not user or not verify_password(credentials.password, user.hashed_password):
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect email or password"
+        )
+    
+    if not user.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail="User account is inactive"
+        )
+    
+    # Create access token
+    access_token = create_access_token(data={"sub": str(user.id)})
+    
+    logger.info(f"User logged in: {user.email}")
+    
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+@app.get("/auth/me", response_model=UserResponse)
+async def get_me(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get current authenticated user information.
+    
+    Requires valid JWT token in Authorization header.
+    """
+    return current_user
+
+
+# ============================================================================
+# Ticket Endpoints
+# ============================================================================
+
+
 @app.post("/tickets", response_model=TicketResponse, status_code=201)
 async def create_ticket(
     ticket_data: TicketCreate,
     background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Create a new support ticket.
     
-    Returns 201 immediately with ticket ID and 'pending' status.
+    Requires authentication. Returns 201 immediately with ticket ID and 'pending' status.
     AI processing happens asynchronously in the background.
     """
     try:
-        # Create new ticket
-        new_ticket = Ticket(raw_content=ticket_data.raw_content)
+        # Create new ticket with user association
+        new_ticket = Ticket(
+            raw_content=ticket_data.raw_content,
+            created_by=current_user.id,
+        )
         db.add(new_ticket)
         await db.commit()
         await db.refresh(new_ticket)
         
-        logger.info(f"Created ticket {new_ticket.id}")
+        logger.info(f"Created ticket {new_ticket.id} by user {current_user.email}")
         
         # Schedule background task for AI processing
         # Create a new session for the background task
@@ -97,17 +216,32 @@ async def create_ticket(
 async def list_tickets(
     skip: int = 0,
     limit: int = 100,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all tickets with pagination."""
+    """
+    List tickets with role-based filtering.
+    
+    - AGENT/ADMIN: See all tickets
+    - CUSTOMER: See only their own tickets
+    
+    Requires authentication.
+    """
     try:
+        # Build query based on user role
+        query = select(Ticket)
+        
+        # Customers can only see their own tickets
+        if current_user.role == UserRole.CUSTOMER:
+            query = query.where(Ticket.created_by == current_user.id)
+        
         # Get total count
-        count_result = await db.execute(select(Ticket))
+        count_result = await db.execute(query)
         total = len(count_result.scalars().all())
         
         # Get paginated tickets
         result = await db.execute(
-            select(Ticket)
+            query
             .order_by(Ticket.created_at.desc())
             .offset(skip)
             .limit(limit)
@@ -149,9 +283,14 @@ async def get_ticket(
 async def update_ticket(
     ticket_id: str,
     ticket_update: TicketUpdate,
+    current_user: User = Depends(require_role(UserRole.AGENT, UserRole.ADMIN)),
     db: AsyncSession = Depends(get_db),
 ):
-    """Update a ticket's draft response or other fields."""
+    """
+    Update a ticket's draft response or other fields.
+    
+    Requires AGENT or ADMIN role.
+    """
     try:
         result = await db.execute(
             select(Ticket).where(Ticket.id == ticket_id)
@@ -185,9 +324,14 @@ async def update_ticket(
 @app.post("/tickets/{ticket_id}/resolve", response_model=TicketResponse)
 async def resolve_ticket(
     ticket_id: str,
+    current_user: User = Depends(require_role(UserRole.AGENT, UserRole.ADMIN)),
     db: AsyncSession = Depends(get_db),
 ):
-    """Mark a ticket as resolved."""
+    """
+    Mark a ticket as resolved.
+    
+    Requires AGENT or ADMIN role.
+    """
     try:
         result = await db.execute(
             select(Ticket).where(Ticket.id == ticket_id)
@@ -203,7 +347,7 @@ async def resolve_ticket(
         # Mark as resolved
         ticket.resolved = True
         ticket.resolved_at = datetime.utcnow()
-        # ticket.resolved_by can be set when auth is implemented
+        ticket.resolved_by = current_user.email
         
         await db.commit()
         await db.refresh(ticket)
