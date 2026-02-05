@@ -2,10 +2,9 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import datetime
 
-from fastapi import FastAPI, Depends, BackgroundTasks, HTTPException, status
+from fastapi import FastAPI, Depends, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
@@ -13,43 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db, init_db, AsyncSessionLocal
 from app.events import event_manager
-from app.models import Ticket, User, UserRole
+from app.models import Ticket
 from app.schemas import TicketCreate, TicketResponse, TicketListResponse, TicketUpdate
 from app.services import process_ticket_with_ai
-from app.auth import (
-    Token, UserCreate, UserLogin, UserResponse,
-    get_password_hash, authenticate_user, create_access_token,
-    get_current_user, get_current_user_required, get_user_by_email,
-    require_agent, ACCESS_TOKEN_EXPIRE_MINUTES
-)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-async def seed_demo_users(db: AsyncSession):
-    """Create demo users if they don't exist."""
-    demo_users = [
-        {"email": "customer@demo.com", "password": "demo123", "name": "Demo Customer", "role": UserRole.CUSTOMER, "plan": "Pro"},
-        {"email": "agent@demo.com", "password": "demo123", "name": "Demo Agent", "role": UserRole.AGENT, "plan": None},
-        {"email": "admin@demo.com", "password": "demo123", "name": "Demo Admin", "role": UserRole.ADMIN, "plan": None},
-    ]
-    
-    for user_data in demo_users:
-        existing = await get_user_by_email(db, user_data["email"])
-        if not existing:
-            user = User(
-                email=user_data["email"],
-                password_hash=get_password_hash(user_data["password"]),
-                name=user_data["name"],
-                role=user_data["role"],
-                plan=user_data["plan"]
-            )
-            db.add(user)
-    
-    await db.commit()
-    logger.info("Demo users seeded")
 
 
 @asynccontextmanager
@@ -58,11 +27,6 @@ async def lifespan(app: FastAPI):
     # Startup: Initialize database
     logger.info("Initializing database...")
     await init_db()
-    
-    # Seed demo users
-    async with AsyncSessionLocal() as db:
-        await seed_demo_users(db)
-    
     logger.info("Database initialized successfully")
     yield
     # Shutdown: cleanup if needed
@@ -91,69 +55,6 @@ app.add_middleware(
 async def root():
     """Health check endpoint."""
     return {"message": "AI Support Triage Hub API", "status": "running"}
-
-
-# ============= AUTH ENDPOINTS =============
-
-@app.post("/auth/register", response_model=UserResponse, status_code=201)
-async def register(
-    user_data: UserCreate,
-    db: AsyncSession = Depends(get_db),
-):
-    """Register a new user."""
-    # Check if email already exists
-    existing = await get_user_by_email(db, user_data.email)
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
-        )
-    
-    # Create user
-    user = User(
-        email=user_data.email,
-        password_hash=get_password_hash(user_data.password),
-        name=user_data.name,
-        role=user_data.role,
-        plan=user_data.plan,
-    )
-    db.add(user)
-    await db.commit()
-    await db.refresh(user)
-    
-    logger.info(f"Registered new user: {user.email}")
-    return user
-
-
-@app.post("/auth/login", response_model=Token)
-async def login(
-    credentials: UserLogin,
-    db: AsyncSession = Depends(get_db),
-):
-    """Login and get JWT token."""
-    user = await authenticate_user(db, credentials.email, credentials.password)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    access_token = create_access_token(
-        data={"sub": str(user.id)},
-        expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-    
-    logger.info(f"User logged in: {user.email}")
-    return {"access_token": access_token, "token_type": "bearer"}
-
-
-@app.get("/auth/me", response_model=UserResponse)
-async def get_me(
-    current_user: User = Depends(get_current_user_required),
-):
-    """Get current authenticated user."""
-    return current_user
 
 
 @app.post("/tickets", response_model=TicketResponse, status_code=201)

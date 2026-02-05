@@ -19,17 +19,6 @@ class TicketUpdate(BaseModel):
     urgency: Optional[str] = Field(None, description="Updated urgency")
 
 
-class CustomerInfo(BaseModel):
-    """Embedded customer info for ticket response."""
-    id: UUID
-    name: str
-    email: str
-    plan: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
-
 class TicketResponse(BaseModel):
     """Schema for ticket response."""
     id: UUID
@@ -43,8 +32,6 @@ class TicketResponse(BaseModel):
     resolved: bool
     resolved_at: Optional[datetime] = None
     resolved_by: Optional[str] = None
-    customer_id: Optional[UUID] = None
-    customer: Optional[CustomerInfo] = None
 
     class Config:
         from_attributes = True

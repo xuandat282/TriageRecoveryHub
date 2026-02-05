@@ -6,7 +6,6 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { ToastProvider } from "@/components/ui/Toast";
 import ThemeToggle from "@/components/ui/ThemeToggle";
-import { AuthProvider } from "@/lib/AuthContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,23 +31,21 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <AuthProvider>
-          <QueryClientProvider client={queryClient}>
-            <ToastProvider>
-              {/* Skip Link for Accessibility */}
-              <a href="#main-content" className="skip-link">
-                Skip to main content
-              </a>
+        <QueryClientProvider client={queryClient}>
+          <ToastProvider>
+            {/* Skip Link for Accessibility */}
+            <a href="#main-content" className="skip-link">
+              Skip to main content
+            </a>
 
-              {/* Theme Toggle - Fixed Position */}
-              <div className="fixed top-4 right-4 z-50">
-                <ThemeToggle />
-              </div>
+            {/* Theme Toggle - Fixed Position */}
+            <div className="fixed top-4 right-4 z-50">
+              <ThemeToggle />
+            </div>
 
-              {children}
-            </ToastProvider>
-          </QueryClientProvider>
-        </AuthProvider>
+            {children}
+          </ToastProvider>
+        </QueryClientProvider>
       </body>
     </html>
   );
