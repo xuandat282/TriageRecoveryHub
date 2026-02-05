@@ -1,10 +1,22 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { api, type TicketCreateRequest } from "@/lib/api";
 import { Button } from "@/components/ui";
 import { useToast } from "@/components/ui/Toast";
 import { Send } from "lucide-react";
+
+// Dynamic import for Quill (client-side only)
+const RichTextEditor = dynamic(
+    () => import("@/components/ui/RichTextEditor"),
+    {
+        ssr: false,
+        loading: () => (
+            <div className="h-[200px] bg-[var(--surface-secondary)] rounded-lg animate-pulse" />
+        )
+    }
+);
 
 interface TicketFormProps {
     onTicketCreated: () => void;
@@ -14,7 +26,6 @@ export default function TicketForm({ onTicketCreated }: TicketFormProps) {
     const [content, setContent] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
     const errorRef = useRef<HTMLDivElement>(null);
     const { showToast } = useToast();
 
@@ -25,13 +36,20 @@ export default function TicketForm({ onTicketCreated }: TicketFormProps) {
         }
     }, [error]);
 
+    // Strip HTML tags to get plain text for validation
+    const getPlainText = (html: string) => {
+        const temp = document.createElement("div");
+        temp.innerHTML = html;
+        return temp.textContent || temp.innerText || "";
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
 
-        if (!content.trim()) {
+        const plainText = getPlainText(content).trim();
+        if (!plainText) {
             setError("Please enter ticket content");
-            textareaRef.current?.focus();
             return;
         }
 
@@ -39,7 +57,7 @@ export default function TicketForm({ onTicketCreated }: TicketFormProps) {
 
         try {
             const data: TicketCreateRequest = {
-                raw_content: content,
+                raw_content: content, // Keep HTML for rich formatting
             };
 
             await api.createTicket(data);
@@ -69,22 +87,14 @@ export default function TicketForm({ onTicketCreated }: TicketFormProps) {
                     >
                         Describe your issue
                     </label>
-                    <textarea
-                        id="ticket-content"
-                        ref={textareaRef}
+                    <RichTextEditor
                         value={content}
-                        onChange={(e) => setContent(e.target.value)}
-                        rows={5}
-                        className="input resize-none"
+                        onChange={setContent}
                         placeholder="Please describe your issue in detail…"
-                        disabled={isSubmitting}
-                        aria-describedby={error ? "ticket-error" : "ticket-help"}
-                        aria-invalid={!!error}
-                        autoComplete="off"
-                        spellCheck="true"
+                        minHeight="150px"
                     />
                     <p id="ticket-help" className="text-xs text-[var(--text-tertiary)] mt-1">
-                        Provide as much detail as possible for faster resolution.
+                        Use formatting to highlight important details. Provide as much context as possible.
                     </p>
                 </div>
 
@@ -114,3 +124,4 @@ export default function TicketForm({ onTicketCreated }: TicketFormProps) {
         </div>
     );
 }
+
