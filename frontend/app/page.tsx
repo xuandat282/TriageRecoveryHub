@@ -3,6 +3,7 @@
 import { useState } from "react";
 import TicketForm from "@/components/TicketForm";
 import TicketList from "@/components/TicketList";
+import { Sparkles, Zap, CheckCircle } from "lucide-react";
 
 export default function Home() {
   const [refreshKey, setRefreshKey] = useState(0);
@@ -13,56 +14,84 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      <div className="container mx-auto px-4 py-12">
-        <div className="max-w-6xl mx-auto">
-          {/* Header */}
-          <div className="text-center mb-12">
-            <h1 className="text-5xl font-bold text-gray-900 mb-4">
-              AI Support Triage Hub
-            </h1>
-            <p className="text-xl text-gray-600">
-              Submit your support tickets and let AI categorize and draft responses
-            </p>
-          </div>
+    <main id="main-content" className="min-h-screen bg-[var(--surface-secondary)]">
+      {/* Hero Section */}
+      <div className="relative overflow-hidden">
+        {/* Gradient Background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-[var(--color-primary-100)] via-[var(--surface-secondary)] to-[var(--color-primary-50)] opacity-60" />
 
-          {/* Main Grid */}
-          <div className="grid lg:grid-cols-2 gap-8">
-            {/* Left Column - Form */}
-            <div>
-              <TicketForm onTicketCreated={handleTicketCreated} />
+        {/* Decorative Blobs */}
+        <div className="absolute top-20 left-10 w-72 h-72 bg-[var(--color-primary-300)] rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse" />
+        <div className="absolute top-40 right-10 w-72 h-72 bg-[var(--color-primary-400)] rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-pulse" style={{ animationDelay: "1s" }} />
+
+        <div className="container relative mx-auto px-4 py-16">
+          <div className="max-w-6xl mx-auto">
+            {/* Header */}
+            <div className="text-center mb-16">
+              <h1 className="text-5xl md:text-6xl font-bold text-[var(--text-primary)] mb-6 leading-tight">
+                AI Support{" "}
+                <span className="bg-gradient-to-r from-[var(--color-primary-500)] to-[var(--color-primary-700)] bg-clip-text text-transparent">
+                  Triage Hub
+                </span>
+              </h1>
+              <p className="text-xl text-[var(--text-secondary)] max-w-2xl mx-auto">
+                Submit your support tickets and let AI categorize and draft responses instantly
+              </p>
             </div>
 
-            {/* Right Column - Ticket List */}
-            <div key={refreshKey}>
-              <TicketList />
-            </div>
-          </div>
+            {/* Main Grid */}
+            <div className="grid lg:grid-cols-2 gap-8">
+              {/* Left Column - Form */}
+              <div>
+                <TicketForm onTicketCreated={handleTicketCreated} />
+              </div>
 
-          {/* Footer Info */}
-          <div className="mt-12 text-center">
-            <div className="bg-white rounded-lg shadow-md p-6 max-w-3xl mx-auto">
-              <h3 className="text-lg font-semibold text-gray-800 mb-3">
-                How It Works
-              </h3>
-              <div className="grid md:grid-cols-3 gap-4 text-sm text-gray-600">
-                <div>
-                  <div className="bg-blue-100 text-blue-600 rounded-full w-8 h-8 flex items-center justify-center mx-auto mb-2 font-bold">
-                    1
+              {/* Right Column - Ticket List */}
+              <div key={refreshKey}>
+                <TicketList />
+              </div>
+            </div>
+
+            {/* How it Works Section */}
+            <div className="mt-16">
+              <div className="card glass p-8 max-w-4xl mx-auto">
+                <h2 className="text-2xl font-bold text-[var(--text-primary)] text-center mb-8">
+                  How It Works
+                </h2>
+                <div className="grid md:grid-cols-3 gap-8">
+                  <div className="text-center">
+                    <div className="w-14 h-14 bg-gradient-to-br from-[var(--color-primary-400)] to-[var(--color-primary-600)] rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                      <Sparkles className="w-7 h-7 text-white" aria-hidden="true" />
+                    </div>
+                    <h3 className="font-semibold text-[var(--text-primary)] mb-2">
+                      1. Submit Ticket
+                    </h3>
+                    <p className="text-sm text-[var(--text-secondary)]">
+                      Describe your issue in detail for accurate categorization
+                    </p>
                   </div>
-                  <p>Submit your support ticket with issue details</p>
-                </div>
-                <div>
-                  <div className="bg-purple-100 text-purple-600 rounded-full w-8 h-8 flex items-center justify-center mx-auto mb-2 font-bold">
-                    2
+                  <div className="text-center">
+                    <div className="w-14 h-14 bg-gradient-to-br from-[var(--color-primary-400)] to-[var(--color-primary-600)] rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                      <Zap className="w-7 h-7 text-white" aria-hidden="true" />
+                    </div>
+                    <h3 className="font-semibold text-[var(--text-primary)] mb-2">
+                      2. AI Analysis
+                    </h3>
+                    <p className="text-sm text-[var(--text-secondary)]">
+                      Our AI analyzes, categorizes, and drafts a response instantly
+                    </p>
                   </div>
-                  <p>AI analyzes and categorizes your ticket in the background</p>
-                </div>
-                <div>
-                  <div className="bg-green-100 text-green-600 rounded-full w-8 h-8 flex items-center justify-center mx-auto mb-2 font-bold">
-                    3
+                  <div className="text-center">
+                    <div className="w-14 h-14 bg-gradient-to-br from-[var(--color-success-400)] to-[var(--color-success-600)] rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                      <CheckCircle className="w-7 h-7 text-white" aria-hidden="true" />
+                    </div>
+                    <h3 className="font-semibold text-[var(--text-primary)] mb-2">
+                      3. Get Response
+                    </h3>
+                    <p className="text-sm text-[var(--text-secondary)]">
+                      Review the AI draft and resolve tickets with one click
+                    </p>
                   </div>
-                  <p>Receive AI-generated draft response and categorization</p>
                 </div>
               </div>
             </div>

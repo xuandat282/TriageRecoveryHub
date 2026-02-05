@@ -2,7 +2,9 @@
 
 import { type Ticket, TicketStatus } from "@/lib/api";
 import { cn } from "@/lib/cn";
-import { Clock, CheckCircle2, AlertCircle, XCircle } from "lucide-react";
+import { Badge } from "@/components/ui";
+import type { BadgeVariant } from "@/components/ui/Badge";
+import { Clock, CheckCircle2, XCircle } from "lucide-react";
 
 interface TicketCardProps {
     ticket: Ticket;
@@ -10,83 +12,77 @@ interface TicketCardProps {
 }
 
 export default function TicketCard({ ticket, onClick }: TicketCardProps) {
-    const getUrgencyStyles = (urgency: string | null) => {
-        switch (urgency?.toLowerCase()) {
-            case "critical":
-                return "bg-red-100 text-red-800 border-red-300";
-            case "high":
-                return "bg-orange-100 text-orange-800 border-orange-300";
-            case "medium":
-                return "bg-yellow-100 text-yellow-800 border-yellow-300";
-            case "low":
-                return "bg-green-100 text-green-800 border-green-300";
-            default:
-                return "bg-gray-100 text-gray-800 border-gray-300";
-        }
+    // Map urgency to badge variant
+    const urgencyVariant: Record<string, BadgeVariant> = {
+        critical: "critical",
+        high: "high",
+        medium: "medium",
+        low: "low",
+    };
+
+    // Map status to badge variant
+    const statusVariant: Record<TicketStatus, BadgeVariant> = {
+        [TicketStatus.PENDING]: "pending",
+        [TicketStatus.PROCESSING]: "processing",
+        [TicketStatus.COMPLETED]: "completed",
+        [TicketStatus.FAILED]: "failed",
     };
 
     const getStatusIcon = (status: TicketStatus) => {
         switch (status) {
             case TicketStatus.PENDING:
-                return <Clock className="w-4 h-4" />;
+                return <Clock className="w-4 h-4" aria-hidden="true" />;
             case TicketStatus.PROCESSING:
-                return <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>;
+                return <div className="spinner" aria-hidden="true" />;
             case TicketStatus.COMPLETED:
-                return <CheckCircle2 className="w-4 h-4 text-green-600" />;
+                return <CheckCircle2 className="w-4 h-4 text-[var(--color-success-600)]" aria-hidden="true" />;
             case TicketStatus.FAILED:
-                return <XCircle className="w-4 h-4 text-red-600" />;
-        }
-    };
-
-    const getStatusStyles = (status: TicketStatus) => {
-        switch (status) {
-            case TicketStatus.PENDING:
-                return "bg-yellow-100 text-yellow-800";
-            case TicketStatus.PROCESSING:
-                return "bg-blue-100 text-blue-800";
-            case TicketStatus.COMPLETED:
-                return "bg-green-100 text-green-800";
-            case TicketStatus.FAILED:
-                return "bg-red-100 text-red-800";
+                return <XCircle className="w-4 h-4 text-[var(--color-danger-600)]" aria-hidden="true" />;
         }
     };
 
     return (
         <div
             onClick={onClick}
+            onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onClick();
+                }
+            }}
+            role="button"
+            tabIndex={0}
             className={cn(
-                "border rounded-lg p-4 cursor-pointer transition-all duration-200",
-                "hover:shadow-lg hover:border-blue-400",
-                ticket.resolved && "opacity-60 bg-gray-50"
+                "card card-interactive p-4",
+                ticket.resolved && "opacity-60"
             )}
+            aria-label={`Ticket: ${ticket.raw_content.slice(0, 50)}${ticket.raw_content.length > 50 ? "…" : ""}. Status: ${ticket.status}${ticket.urgency ? `. Urgency: ${ticket.urgency}` : ""}`}
         >
             {/* Header */}
             <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2">
                     {getStatusIcon(ticket.status)}
-                    <span className={cn("px-2 py-1 rounded-full text-xs font-semibold", getStatusStyles(ticket.status))}>
-                        {ticket.status.toUpperCase()}
-                    </span>
+                    <Badge variant={statusVariant[ticket.status]}>
+                        {ticket.status}
+                    </Badge>
                     {ticket.resolved && (
-                        <span className="px-2 py-1 rounded-full text-xs font-semibold bg-gray-200 text-gray-700">
-                            RESOLVED
-                        </span>
+                        <Badge variant="resolved">Resolved</Badge>
                     )}
                 </div>
                 {ticket.urgency && (
-                    <span className={cn("px-3 py-1 rounded-full text-xs font-semibold border", getUrgencyStyles(ticket.urgency))}>
-                        {ticket.urgency.toUpperCase()}
-                    </span>
+                    <Badge variant={urgencyVariant[ticket.urgency.toLowerCase()] || "default"}>
+                        {ticket.urgency}
+                    </Badge>
                 )}
             </div>
 
             {/* Content */}
-            <p className="text-gray-800 font-medium mb-2 line-clamp-2">
+            <p className="text-[var(--text-primary)] font-medium mb-2 line-clamp-2">
                 {ticket.raw_content}
             </p>
 
             {/* Metadata */}
-            <div className="flex items-center gap-4 text-xs text-gray-500">
+            <div className="flex items-center gap-4 text-xs text-[var(--text-tertiary)]">
                 {ticket.category && (
                     <span className="flex items-center gap-1">
                         <span className="font-medium">Category:</span> {ticket.category}
@@ -97,7 +93,7 @@ export default function TicketCard({ ticket, onClick }: TicketCardProps) {
                         <span className="font-medium">Sentiment:</span> {ticket.sentiment_score}/10
                     </span>
                 )}
-                <span className="ml-auto">
+                <span className="ml-auto font-variant-numeric tabular-nums">
                     {new Date(ticket.created_at).toLocaleString()}
                 </span>
             </div>
