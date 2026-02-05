@@ -65,7 +65,7 @@ export function TicketResponse() {
                     </div>
                 </div>
             ) : (
-                <div className="bg-[var(--color-primary-50)] border border-[var(--color-primary-200)] rounded-lg p-4">
+                <div className="bg-[var(--color-primary-50)] dark:bg-[var(--color-primary-900)] border border-[var(--color-primary-200)] dark:border-[var(--color-primary-700)] rounded-lg p-4">
                     <p className="text-[var(--text-primary)] whitespace-pre-wrap">
                         {ticket.draft_response || "No draft response available yet."}
                     </p>

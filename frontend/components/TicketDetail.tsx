@@ -141,8 +141,8 @@ export default function TicketDetail({ ticket, onClose }: TicketDetailProps) {
                                 </div>
                             </div>
                         ) : (
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                <p className="text-gray-900 whitespace-pre-wrap">
+                            <div className="bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+                                <p className="text-gray-900 dark:text-gray-50 whitespace-pre-wrap">
                                     {ticket.draft_response || "No draft response available yet."}
                                 </p>
                             </div>

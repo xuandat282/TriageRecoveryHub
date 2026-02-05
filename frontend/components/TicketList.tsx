@@ -12,7 +12,7 @@ import TicketCard from "./TicketCard";
 type FilterType = "all" | "pending" | "processing" | "completed" | "resolved";
 
 export default function TicketList() {
-    const [selectedTicket, setSelectedTicket] = useState<TicketType | null>(null);
+    const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
     const [filter, setFilter] = useState<FilterType>("all");
 
     // Enable real-time updates via SSE
@@ -22,6 +22,11 @@ export default function TicketList() {
         queryKey: ["tickets"],
         queryFn: api.getTickets,
     });
+
+    // Look up the selected ticket from the current data
+    const selectedTicket = selectedTicketId 
+        ? data?.tickets.find(t => t.id === selectedTicketId) ?? null
+        : null;
 
     const filteredTickets = data?.tickets.filter((ticket) => {
         switch (filter) {
@@ -125,7 +130,7 @@ export default function TicketList() {
                                 <TicketCard
                                     key={ticket.id}
                                     ticket={ticket}
-                                    onClick={() => setSelectedTicket(ticket)}
+                                    onClick={() => setSelectedTicketId(ticket.id)}
                                 />
                             ))}
                         </div>
@@ -137,7 +142,7 @@ export default function TicketList() {
             {selectedTicket && (
                 <Ticket.Provider
                     ticket={selectedTicket}
-                    onClose={() => setSelectedTicket(null)}
+                    onClose={() => setSelectedTicketId(null)}
                 >
                     <Ticket.Frame>
                         <Ticket.Header />
