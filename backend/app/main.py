@@ -14,7 +14,7 @@ from app.database import get_db, init_db, AsyncSessionLocal
 from app.events import event_manager
 from app.models import Ticket
 from app.schemas import TicketCreate, TicketResponse, TicketListResponse, TicketUpdate
-from app.services import process_ticket_with_ai
+from app.services import process_ticket_with_ai, recover_stuck_tickets
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -28,6 +28,13 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing database...")
     await init_db()
     logger.info("Database initialized successfully")
+    
+    # Recover stuck tickets
+    logger.info("Recovering stuck tickets...")
+    async with AsyncSessionLocal() as session:
+        await recover_stuck_tickets(session)
+    logger.info("Recovery check complete")
+    
     yield
     # Shutdown: cleanup if needed
     logger.info("Shutting down application...")

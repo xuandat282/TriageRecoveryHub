@@ -5,9 +5,10 @@ import os
 from uuid import UUID
 
 from dotenv import load_dotenv
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 import google.generativeai as genai
+import re
 
 from app.events import event_manager
 from app.models import Ticket, TicketStatus
@@ -83,16 +84,22 @@ Respond ONLY with valid JSON."""
         # Parse JSON response
         response_text = response.text.strip()
         
-        # Remove markdown code blocks if present
-        if response_text.startswith("```json"):
-            response_text = response_text[7:]
-        if response_text.startswith("```"):
-            response_text = response_text[3:]
-        if response_text.endswith("```"):
-            response_text = response_text[:-3]
-        response_text = response_text.strip()
-        
-        result = json.loads(response_text)
+        # Robust JSON extraction
+        try:
+            # Try to find JSON block explicitly
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(0)
+                result = json.loads(json_str)
+            else:
+                # Try raw text if no braces found (unlikely but possible)
+                result = json.loads(response_text)
+                
+        except json.JSONDecodeError:
+            logger.warning(f"Failed to parse JSON from Gemini: {response_text[:100]}...")
+            # Attempt to sanitize common markdown issues if regex failed
+            clean_text = response_text.replace("```json", "").replace("```", "").strip()
+            result = json.loads(clean_text)
         
         logger.info(f"Gemini analysis complete: {result.get('category')}, {result.get('urgency')}")
         
@@ -103,12 +110,45 @@ Respond ONLY with valid JSON."""
             "draft_response": result.get("draft_response", "Thank you for contacting support. We will review your request and respond shortly."),
         }
         
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse Gemini response as JSON: {str(e)}")
-        return _fallback_analysis(ticket_content)
     except Exception as e:
         logger.error(f"Error calling Gemini API: {str(e)}")
         return _fallback_analysis(ticket_content)
+
+
+async def recover_stuck_tickets(db_session: AsyncSession):
+    """
+    Recover tickets that were stuck in processing due to server restart.
+    
+    Any ticket in PROCESSING status during startup is considered stuck.
+    We reset them to PENDING so they can be picked up again (or FAILED).
+    For now, we mark them as FAILED to alert administrators, 
+    or we could re-queue them. Let's fail them safely to avoid infinite loops
+    if the message itself causes the crash.
+    """
+    try:
+        logger.info("Checking for stuck tickets...")
+        
+        # Find all processing tickets
+        stmt = (
+            update(Ticket)
+            .where(Ticket.status == TicketStatus.PROCESSING)
+            .values(
+                status=TicketStatus.FAILED, 
+                draft_response="Processing failed due to server restart. Please retry."
+            )
+            .execution_options(synchronize_session="fetch")
+        )
+        
+        result = await db_session.execute(stmt)
+        await db_session.commit()
+        
+        if result.rowcount > 0:
+            logger.warning(f"Recovered {result.rowcount} stuck tickets (marked as FAILED).")
+        else:
+            logger.info("No stuck tickets found.")
+            
+    except Exception as e:
+        logger.error(f"Error recovering stuck tickets: {str(e)}")
 
 
 async def _broadcast_ticket_event(ticket_id: UUID, status: str):

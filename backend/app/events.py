@@ -25,7 +25,8 @@ class EventManager:
         Returns:
             asyncio.Queue: A queue for sending messages to this client
         """
-        queue = asyncio.Queue()
+        # Set maxsize to prevent memory leaks if client is slow reader
+        queue = asyncio.Queue(maxsize=100)
         self.active_connections.append(queue)
         logger.info(f"Client connected. Active connections: {len(self.active_connections)}")
         return queue
@@ -49,7 +50,14 @@ class EventManager:
             message: The message to broadcast (typically JSON string)
         """
         for queue in self.active_connections:
-            await queue.put(message)
+            try:
+                # preventing blocking if queue is full, drop message if necessary or use put_nowait
+                if not queue.full():
+                    queue.put_nowait(message)
+                else:
+                    logger.warning("Client queue full, dropping message")
+            except Exception as e:
+                logger.error(f"Error broadcasting to client: {e}")
 
 
 # Global event manager instance
